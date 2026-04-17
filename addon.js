@@ -51,14 +51,13 @@ builder.defineMetaHandler(async ({ type, id }) => {
       const meta = await getSeriesMeta(imdbId);
       const videos = meta.videos;
 
-      // Get 3 random episodes
       const randomEpisodes = pickRandomEpisodes(videos, {
         mode,
         count: 3,
       });
 
       console.log(
-        `Shuffle (${mode}):`,
+        `Weighted Shuffle (${mode}):`,
         randomEpisodes.map((v) => `S${v.season}E${v.number}`),
       );
 
@@ -66,9 +65,10 @@ builder.defineMetaHandler(async ({ type, id }) => {
         meta: {
           id,
           type: "series",
-          name: `🎲 Random Episodes (${mode})`,
 
-          // 🔥 MULTIPLE OPTIONS
+          // Updated label to reflect intelligence
+          name: `🎲 Smart Shuffle (${mode})`,
+
           videos: randomEpisodes.map((ep) => ({
             id: `${imdbId}:${ep.season}:${ep.number}`,
             title: `S${ep.season}E${ep.number} — ${ep.name || "Episode"}`,
@@ -96,7 +96,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
 });
 
 /**
- * Stream Handler (unchanged)
+ * Stream Handler
  */
 builder.defineStreamHandler(() => {
   return Promise.resolve({ streams: [] });
