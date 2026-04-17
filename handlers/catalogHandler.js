@@ -4,7 +4,14 @@ const axios = require("axios");
 const { getPosterFromIMDb } = require("../core/tmdbClient");
 
 /**
- * Fetch series from Cinemeta search
+ * Generate random ID suffix
+ */
+function generateNonce() {
+  return Math.random().toString(36).substring(2, 8);
+}
+
+/**
+ * Fetch series
  */
 async function searchSeries(query) {
   const url = `https://v3-cinemeta.strem.io/catalog/series/top/search=${encodeURIComponent(
@@ -22,32 +29,29 @@ async function catalogHandler({ type, id, extra }) {
   if (type === "series" && id === "shuffle_catalog") {
     const searchQuery = extra?.search;
 
-    if (!searchQuery) {
-      return { metas: [] };
-    }
+    if (!searchQuery) return { metas: [] };
 
     try {
       const results = await searchSeries(searchQuery);
 
-      // Fetch posters in parallel
       const metas = await Promise.all(
         results.map(async (series) => {
-          const tmdbPoster = await getPosterFromIMDb(series.id);
+          const poster = (await getPosterFromIMDb(series.id)) || series.poster;
 
           return {
-            id: `${series.id}:shuffle`,
+            // 🔥 UNIQUE ID EACH TIME
+            id: `${series.id}:shuffle:${generateNonce()}`,
+
             type: "series",
             name: `${series.name} — 🎲 Smart Shuffle`,
-
-            // Prefer TMDB, fallback to Cinemeta
-            poster: tmdbPoster || series.poster,
+            poster,
           };
         }),
       );
 
       return { metas };
     } catch (e) {
-      console.error("Catalog search error:", e.message);
+      console.error("Catalog error:", e.message);
       return { metas: [] };
     }
   }
