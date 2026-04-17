@@ -1,62 +1,81 @@
+// addon.js
+
 const { addonBuilder } = require("stremio-addon-sdk");
-const axios = require("axios");
 const manifest = require("./manifest");
-const { pickRandomEpisode } = require("./core/shuffleEngine");
+
+const { pickRandomEpisodes } = require("./core/shuffleEngine");
 const { getSeriesMeta } = require("./core/cinemetaClient");
 
 const builder = new addonBuilder(manifest);
 
-// Catalog: Shows the "Shuffle" row on your home screen
+/**
+ * Catalog Handler
+ */
 builder.defineCatalogHandler(({ type, id }) => {
   if (type === "series" && id === "shuffle_catalog") {
     return Promise.resolve({
       metas: [
         {
-          id: "tt0182576:shuffle", // Family Guy
+          id: "tt0182576:shuffle:all",
           type: "series",
-          name: "Shuffle: Family Guy",
+          name: "🎲 Shuffle (All Episodes)",
           poster: "https://images.metahub.space/poster/medium/tt0182576/img",
         },
         {
-          id: "tt0397306:shuffle", // American Dad!
+          id: "tt0182576:shuffle:recent",
           type: "series",
-          name: "Shuffle: American Dad!",
-          poster: "https://images.metahub.space/poster/medium/tt0397306/img",
+          name: "🔥 Shuffle (Recent Seasons)",
+          poster: "https://images.metahub.space/poster/medium/tt0182576/img",
+        },
+        {
+          id: "tt0182576:shuffle:pilot",
+          type: "series",
+          name: "🎬 Shuffle (Season Premieres)",
+          poster: "https://images.metahub.space/poster/medium/tt0182576/img",
         },
       ],
     });
   }
+
   return Promise.resolve({ metas: [] });
 });
 
-// The Brain: Selects the random episode
+/**
+ * Meta Handler
+ */
 builder.defineMetaHandler(async ({ type, id }) => {
-  if (id.endsWith(":shuffle")) {
-    const imdbId = id.split(":")[0];
+  if (id.includes(":shuffle")) {
+    const [imdbId, , mode = "all"] = id.split(":");
 
     try {
       const meta = await getSeriesMeta(imdbId);
       const videos = meta.videos;
-      const randomVid = pickRandomEpisode(videos);
+
+      // Get 3 random episodes
+      const randomEpisodes = pickRandomEpisodes(videos, {
+        mode,
+        count: 3,
+      });
 
       console.log(
-        `Decision: Shuffled to S${randomVid.season} E${randomVid.number}`,
+        `Shuffle (${mode}):`,
+        randomEpisodes.map((v) => `S${v.season}E${v.number}`),
       );
 
       return {
         meta: {
-          id: id,
+          id,
           type: "series",
-          name: `🎲 Playing: ${randomVid.name}`,
-          videos: [
-            {
-              id: `${imdbId}:${randomVid.season}:${randomVid.number}`,
-              title: `Shuffle Result: ${randomVid.name || "Episode " + randomVid.number}`,
-              season: randomVid.season,
-              number: randomVid.number,
-              overview: "Click to find streams for this random episode",
-            },
-          ],
+          name: `🎲 Random Episodes (${mode})`,
+
+          // 🔥 MULTIPLE OPTIONS
+          videos: randomEpisodes.map((ep) => ({
+            id: `${imdbId}:${ep.season}:${ep.number}`,
+            title: `S${ep.season}E${ep.number} — ${ep.name || "Episode"}`,
+            season: ep.season,
+            number: ep.number,
+            overview: "Click to play this episode",
+          })),
         },
       };
     } catch (e) {
@@ -76,7 +95,9 @@ builder.defineMetaHandler(async ({ type, id }) => {
   return Promise.resolve({ meta: null });
 });
 
-// Dummy Stream Handler: Satisfies the SDK requirements
+/**
+ * Stream Handler (unchanged)
+ */
 builder.defineStreamHandler(() => {
   return Promise.resolve({ streams: [] });
 });
