@@ -5,42 +5,29 @@ const { getSeriesMeta } = require("../core/cinemetaClient");
 
 /**
  * Meta Handler
- * Decides which episodes to return when user clicks
  */
 async function metaHandler({ type, id }) {
-  // Only handle shuffle IDs
   if (id.includes(":shuffle")) {
-    // Parse: ttXXXX:shuffle:mode
-    const [imdbId, , mode = "all"] = id.split(":");
+    const [imdbId] = id.split(":");
 
     try {
-      // Fetch metadata (cached)
       const meta = await getSeriesMeta(imdbId);
-
-      // Extract episodes
       const videos = meta.videos;
 
-      // Get weighted-random episodes
+      // Default mode = "all"
       const randomEpisodes = pickRandomEpisodes(videos, {
-        mode,
+        mode: "all",
         count: 3,
       });
-
-      // Debug logging
-      console.log(
-        `Weighted Shuffle (${mode}):`,
-        randomEpisodes.map((v) => `S${v.season}E${v.number}`),
-      );
 
       return {
         meta: {
           id,
           type: "series",
 
-          // UI label
-          name: `🎲 Smart Shuffle (${mode})`,
+          // Cleaner title
+          name: `🎲 Smart Shuffle`,
 
-          // Multiple episode options
           videos: randomEpisodes.map((ep) => ({
             id: `${imdbId}:${ep.season}:${ep.number}`,
             title: `S${ep.season}E${ep.number} — ${ep.name || "Episode"}`,
@@ -64,7 +51,7 @@ async function metaHandler({ type, id }) {
     }
   }
 
-  return Promise.resolve({ meta: null });
+  return { meta: null };
 }
 
 module.exports = metaHandler;

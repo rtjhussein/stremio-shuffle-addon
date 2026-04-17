@@ -1,15 +1,7 @@
 // handlers/catalogHandler.js
 
 const axios = require("axios");
-
-/**
- * Shuffle modes
- */
-const MODES = [
-  { key: "all", label: "🎲 Shuffle (All Episodes)" },
-  { key: "recent", label: "🔥 Shuffle (Recent Seasons)" },
-  { key: "pilot", label: "🎬 Shuffle (Season Premieres)" },
-];
+const { getPosterFromIMDb } = require("../core/tmdbClient");
 
 /**
  * Fetch series from Cinemeta search
@@ -27,32 +19,31 @@ async function searchSeries(query) {
  * Catalog Handler
  */
 async function catalogHandler({ type, id, extra }) {
-  // Only respond to our catalog
   if (type === "series" && id === "shuffle_catalog") {
     const searchQuery = extra?.search;
 
-    // If no search → return empty (clean UI)
     if (!searchQuery) {
       return { metas: [] };
     }
 
     try {
-      // Fetch matching series
       const results = await searchSeries(searchQuery);
 
-      const metas = [];
+      // Fetch posters in parallel
+      const metas = await Promise.all(
+        results.map(async (series) => {
+          const tmdbPoster = await getPosterFromIMDb(series.id);
 
-      // For each found series → create shuffle entries
-      for (const series of results) {
-        for (const mode of MODES) {
-          metas.push({
-            id: `${series.id}:shuffle:${mode.key}`,
+          return {
+            id: `${series.id}:shuffle`,
             type: "series",
-            name: `${series.name} — ${mode.label}`,
-            poster: series.poster,
-          });
-        }
-      }
+            name: `${series.name} — 🎲 Smart Shuffle`,
+
+            // Prefer TMDB, fallback to Cinemeta
+            poster: tmdbPoster || series.poster,
+          };
+        }),
+      );
 
       return { metas };
     } catch (e) {
