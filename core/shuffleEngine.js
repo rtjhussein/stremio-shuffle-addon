@@ -3,38 +3,19 @@
 const { isRecentlyUsed, addToHistory } = require("./sessionMemory");
 
 /**
- * Compute weight
+ * Get a random item from array (uniform distribution)
  */
-function computeWeight(ep, context) {
-  let weight = 1;
-
-  if (context.maxSeason) {
-    weight += (ep.season / context.maxSeason) * 2;
-  }
-
-  if (ep.number === 1) weight *= 0.7;
-  if (ep.number > 3 && ep.number < 15) weight *= 1.2;
-
-  return weight;
+function randomPick(items) {
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
 }
 
 /**
- * Weighted pick
- */
-function weightedPick(items, weights) {
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-
-  for (let i = 0; i < items.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return items[i];
-  }
-
-  return items[items.length - 1];
-}
-
-/**
- * Main function with memory awareness
+ * Pure random episode picker (no weighting)
+ *
+ * Guarantees:
+ * - Equal probability for all episodes
+ * - No recent repeats (session memory)
  */
 function pickRandomEpisodes(videos, options = {}) {
   const mode = options.mode || "all";
@@ -43,7 +24,7 @@ function pickRandomEpisodes(videos, options = {}) {
 
   let eligible = videos.filter((v) => v.season > 0);
 
-  // Mode filtering
+  // Mode filtering (optional behavior)
   if (mode === "recent") {
     const max = Math.max(...eligible.map((v) => v.season));
     eligible = eligible.filter((v) => v.season >= max - 2);
@@ -57,14 +38,14 @@ function pickRandomEpisodes(videos, options = {}) {
     throw new Error("No eligible episodes");
   }
 
-  const maxSeason = Math.max(...eligible.map((v) => v.season));
-
-  // 🔥 FILTER OUT RECENTLY USED
+  /**
+   * Remove recently used episodes
+   */
   let pool = eligible.filter(
     (ep) => !isRecentlyUsed(imdbId, `${ep.season}:${ep.number}`),
   );
 
-  // Fallback if everything filtered out
+  // Fallback if everything was filtered out
   if (pool.length < count) {
     pool = [...eligible];
   }
@@ -72,16 +53,14 @@ function pickRandomEpisodes(videos, options = {}) {
   const results = [];
 
   for (let i = 0; i < count && pool.length > 0; i++) {
-    const weights = pool.map((ep) => computeWeight(ep, { maxSeason }));
-
-    const selected = weightedPick(pool, weights);
+    const selected = randomPick(pool);
 
     results.push(selected);
 
-    // Save to memory
+    // Store in memory to avoid repeats
     addToHistory(imdbId, `${selected.season}:${selected.number}`);
 
-    // Remove from pool
+    // Remove from pool to avoid duplicates in same request
     pool = pool.filter((ep) => ep !== selected);
   }
 

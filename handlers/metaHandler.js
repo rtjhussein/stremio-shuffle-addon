@@ -1,103 +1,110 @@
 // handlers/metaHandler.js
 
-// Import shuffle logic (weighted + memory-aware)
 const { pickRandomEpisodes } = require("../core/shuffleEngine");
-
-// Import Cinemeta client (gives us full series + episode metadata)
 const { getSeriesMeta } = require("../core/cinemetaClient");
+
+/**
+ * Label pool (more cinematic, less mechanical)
+ */
+const LABELS = ["🎲 Smart Pick", "🎲 Try This", "🎲 Shuffle Selection"];
+
+/**
+ * Phrase styles (adds variety + tone)
+ */
+function formatDescription(name, year) {
+  if (!name) return "A mystery episode awaits";
+
+  const formats = [
+    `“${name}”`,
+    `Tonight: “${name}”`,
+    `A random drop: “${name}”`,
+  ];
+
+  const base = formats[Math.floor(Math.random() * formats.length)];
+
+  return year ? `${base} • ${year}` : base;
+}
+
+/**
+ * Get random label
+ */
+function getRandomLabel() {
+  return LABELS[Math.floor(Math.random() * LABELS.length)];
+}
 
 /**
  * Meta Handler
  *
- * Responsible for constructing the "virtual series"
- * that Stremio displays when user clicks "Smart Shuffle"
- *
- * This is where we inject:
- * - Random episode selection
- * - Smart-Start metadata (overview, thumbnail, etc.)
+ * CONTROLLED ANONYMITY MODE:
+ * - Clean, cinematic presentation
+ * - No structural identifiers (S/E hidden)
+ * - Soft phrasing instead of mechanical UI
  */
 async function metaHandler({ id }) {
-  // Only handle our shuffle IDs
   if (id.includes(":shuffle")) {
-    // Extract IMDb ID from composite ID
     const imdbId = id.split(":")[0];
 
     try {
-      // Fetch full series metadata (includes ALL episodes)
       const meta = await getSeriesMeta(imdbId);
-
-      // All available episodes
       const videos = meta.videos;
 
-      /**
-       * Pick random episode(s)
-       *
-       * NOTE:
-       * - count = 1 → feels like a curated recommendation
-       * - count > 1 → feels more like "random list"
-       */
       const randomEpisodes = pickRandomEpisodes(videos, {
         mode: "all",
-        count: 1, // 🔥 Stronger UX: single recommendation
-        imdbId, // required for memory system
+        count: 1,
+        imdbId,
       });
 
-      /**
-       * Construct virtual meta response
-       *
-       * This is what Stremio renders as the "series page"
-       */
       return {
         meta: {
           id,
           type: "series",
 
-          // 🔥 Replace generic title with contextual one
-          name: `${meta.name} — 🎲 Smart Picks`,
+          /**
+           * Simplified naming (less noisy)
+           */
+          name: `${meta.name} — 🎲 Shuffle`,
 
-          // Use real show visuals for immersion
           poster: meta.poster,
           background: meta.background,
 
-          /**
-           * 🔥 SMART-START METADATA INJECTION
-           *
-           * Instead of generic episode entries,
-           * we inject real episode-level metadata:
-           * - overview (synopsis)
-           * - thumbnail (episode still image)
-           */
           videos: randomEpisodes.map((ep) => {
-            // Construct canonical episode ID
             const episodeId = `${imdbId}:${ep.season}:${ep.number}`;
+
+            const year = ep.released
+              ? new Date(ep.released).getFullYear()
+              : null;
 
             return {
               id: episodeId,
 
-              // Clean, structured episode title
-              title: `S${ep.season}E${ep.number} — ${ep.name || "Episode"}`,
+              /**
+               * Primary label
+               */
+              title: getRandomLabel(),
 
+              /**
+               * Cinematic description (less robotic)
+               */
+              description: formatDescription(
+                ep.name || "Mystery Episode",
+                year,
+              ),
+
+              /**
+               * Hidden structure (still required internally)
+               */
               season: ep.season,
               number: ep.number,
 
               /**
-               * 🔥 KEY UPGRADE FIELDS
+               * Visual anchor
                */
-
-              // Episode synopsis (Netflix-style preview text)
-              overview: ep.overview || "No description available.",
-
-              // Episode-specific still image (NOT series poster)
-              thumbnail: ep.thumbnail || null,
-
-              // Optional metadata (nice UX detail)
-              released: ep.released || null,
+              thumbnail: ep.thumbnail || meta.poster,
             };
           }),
         },
       };
     } catch (e) {
-      // Fail gracefully — never break Stremio UI
       return {
         meta: {
           id,
@@ -109,7 +116,6 @@ async function metaHandler({ id }) {
     }
   }
 
-  // Default fallback for non-shuffle IDs
   return { meta: null };
 }
 
