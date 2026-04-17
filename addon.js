@@ -2,6 +2,7 @@ const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const manifest = require("./manifest");
 const { pickRandomEpisode } = require("./core/shuffleEngine");
+const { getSeriesMeta } = require("./core/cinemetaClient");
 
 const builder = new addonBuilder(manifest);
 
@@ -34,11 +35,8 @@ builder.defineMetaHandler(async ({ type, id }) => {
     const imdbId = id.split(":")[0];
 
     try {
-      const metaRes = await axios.get(
-        `https://v3-cinemeta.strem.io/meta/series/${imdbId}.json`,
-      );
-
-      const videos = metaRes.data.meta.videos;
+      const meta = await getSeriesMeta(imdbId);
+      const videos = meta.videos;
       const randomVid = pickRandomEpisode(videos);
 
       console.log(
