@@ -1,10 +1,13 @@
 // index.js
 
-require("dotenv").config(); // 👈 add this
+require("dotenv").config();
 
 const { serveHTTP } = require("stremio-addon-sdk");
 const addonInterface = require("./addon");
 
-serveHTTP(addonInterface, { port: 7000 });
+// 🔥 Use dynamic port (required for deployment)
+const PORT = process.env.PORT || 7000;
 
-console.log("Addon running at: http://localhost:7000/manifest.json");
+serveHTTP(addonInterface, { port: PORT });
+
+console.log(`Addon running at: http://localhost:${PORT}/manifest.json`);
