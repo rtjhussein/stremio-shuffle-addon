@@ -1,29 +1,6 @@
 // handlers/catalogHandler.js
 
-/**
- * List of supported series (expand this over time)
- * Each entry contains:
- * - IMDb ID
- * - Display name
- * - Poster
- */
-const SERIES = [
-  {
-    id: "tt0182576",
-    name: "Family Guy",
-    poster: "https://images.metahub.space/poster/medium/tt0182576/img",
-  },
-  {
-    id: "tt0096697",
-    name: "The Simpsons",
-    poster: "https://images.metahub.space/poster/medium/tt0096697/img",
-  },
-  {
-    id: "tt0397306",
-    name: "American Dad!",
-    poster: "https://images.metahub.space/poster/medium/tt0397306/img",
-  },
-];
+const axios = require("axios");
 
 /**
  * Shuffle modes
@@ -35,32 +12,56 @@ const MODES = [
 ];
 
 /**
+ * Fetch series from Cinemeta search
+ */
+async function searchSeries(query) {
+  const url = `https://v3-cinemeta.strem.io/catalog/series/top/search=${encodeURIComponent(
+    query,
+  )}.json`;
+
+  const res = await axios.get(url);
+  return res.data.metas || [];
+}
+
+/**
  * Catalog Handler
  */
-function catalogHandler({ type, id }) {
+async function catalogHandler({ type, id, extra }) {
+  // Only respond to our catalog
   if (type === "series" && id === "shuffle_catalog") {
-    const metas = [];
+    const searchQuery = extra?.search;
 
-    // Generate entries for each series + each mode
-    for (const series of SERIES) {
-      for (const mode of MODES) {
-        metas.push({
-          id: `${series.id}:shuffle:${mode.key}`,
-
-          type: "series",
-
-          // Combine series + mode in UI
-          name: `${series.name} — ${mode.label}`,
-
-          poster: series.poster,
-        });
-      }
+    // If no search → return empty (clean UI)
+    if (!searchQuery) {
+      return { metas: [] };
     }
 
-    return Promise.resolve({ metas });
+    try {
+      // Fetch matching series
+      const results = await searchSeries(searchQuery);
+
+      const metas = [];
+
+      // For each found series → create shuffle entries
+      for (const series of results) {
+        for (const mode of MODES) {
+          metas.push({
+            id: `${series.id}:shuffle:${mode.key}`,
+            type: "series",
+            name: `${series.name} — ${mode.label}`,
+            poster: series.poster,
+          });
+        }
+      }
+
+      return { metas };
+    } catch (e) {
+      console.error("Catalog search error:", e.message);
+      return { metas: [] };
+    }
   }
 
-  return Promise.resolve({ metas: [] });
+  return { metas: [] };
 }
 
 module.exports = catalogHandler;
