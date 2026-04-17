@@ -1,99 +1,88 @@
 // core/shuffleEngine.js
 
+const { isRecentlyUsed, addToHistory } = require("./sessionMemory");
+
 /**
- * Compute a weight score for an episode
- * Higher weight = higher chance of being selected
+ * Compute weight
  */
 function computeWeight(ep, context) {
   let weight = 1;
 
-  // Bias toward newer seasons
   if (context.maxSeason) {
-    const seasonScore = ep.season / context.maxSeason;
-    weight += seasonScore * 2; // strong influence
+    weight += (ep.season / context.maxSeason) * 2;
   }
 
-  // Slight penalty for pilots (often weaker or overplayed)
-  if (ep.number === 1) {
-    weight *= 0.7;
-  }
-
-  // Slight boost for mid-season episodes
-  if (ep.number > 3 && ep.number < 15) {
-    weight *= 1.2;
-  }
+  if (ep.number === 1) weight *= 0.7;
+  if (ep.number > 3 && ep.number < 15) weight *= 1.2;
 
   return weight;
 }
 
 /**
- * Select one item using weighted randomness
+ * Weighted pick
  */
 function weightedPick(items, weights) {
-  const total = weights.reduce((sum, w) => sum + w, 0);
-  let threshold = Math.random() * total;
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
 
   for (let i = 0; i < items.length; i++) {
-    threshold -= weights[i];
-    if (threshold <= 0) {
-      return items[i];
-    }
+    r -= weights[i];
+    if (r <= 0) return items[i];
   }
 
   return items[items.length - 1];
 }
 
 /**
- * Returns multiple weighted-random episodes (no duplicates)
+ * Main function with memory awareness
  */
 function pickRandomEpisodes(videos, options = {}) {
-  if (!Array.isArray(videos)) {
-    throw new Error("Invalid videos input");
-  }
-
   const mode = options.mode || "all";
   const count = options.count || 1;
+  const imdbId = options.imdbId;
 
-  // Remove specials
   let eligible = videos.filter((v) => v.season > 0);
 
-  // Apply mode filtering
-  switch (mode) {
-    case "recent":
-      const maxSeasonRecent = Math.max(...eligible.map((v) => v.season));
-      eligible = eligible.filter((v) => v.season >= maxSeasonRecent - 2);
-      break;
+  // Mode filtering
+  if (mode === "recent") {
+    const max = Math.max(...eligible.map((v) => v.season));
+    eligible = eligible.filter((v) => v.season >= max - 2);
+  }
 
-    case "pilot":
-      eligible = eligible.filter((v) => v.number === 1);
-      break;
-
-    case "all":
-    default:
-      break;
+  if (mode === "pilot") {
+    eligible = eligible.filter((v) => v.number === 1);
   }
 
   if (eligible.length === 0) {
-    throw new Error("No eligible episodes found");
+    throw new Error("No eligible episodes");
   }
 
   const maxSeason = Math.max(...eligible.map((v) => v.season));
 
-  const results = [];
-  const pool = [...eligible];
+  // 🔥 FILTER OUT RECENTLY USED
+  let pool = eligible.filter(
+    (ep) => !isRecentlyUsed(imdbId, `${ep.season}:${ep.number}`),
+  );
 
-  // Pick multiple WITHOUT duplicates
+  // Fallback if everything filtered out
+  if (pool.length < count) {
+    pool = [...eligible];
+  }
+
+  const results = [];
+
   for (let i = 0; i < count && pool.length > 0; i++) {
-    // Compute weights dynamically
     const weights = pool.map((ep) => computeWeight(ep, { maxSeason }));
 
     const selected = weightedPick(pool, weights);
 
     results.push(selected);
 
-    // Remove selected episode from pool
-    const index = pool.indexOf(selected);
-    pool.splice(index, 1);
+    // Save to memory
+    addToHistory(imdbId, `${selected.season}:${selected.number}`);
+
+    // Remove from pool
+    pool = pool.filter((ep) => ep !== selected);
   }
 
   return results;

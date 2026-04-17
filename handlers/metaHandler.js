@@ -5,7 +5,6 @@ const { getSeriesMeta } = require("../core/cinemetaClient");
 
 async function metaHandler({ id }) {
   if (id.includes(":shuffle")) {
-    // Extract imdbId only
     const imdbId = id.split(":")[0];
 
     try {
@@ -15,13 +14,14 @@ async function metaHandler({ id }) {
       const randomEpisodes = pickRandomEpisodes(videos, {
         mode: "all",
         count: 3,
+        imdbId, // 🔥 REQUIRED for memory
       });
 
       return {
         meta: {
           id,
           type: "series",
-          name: `🎲 Smart Shuffle`,
+          name: "🎲 Smart Shuffle",
 
           videos: randomEpisodes.map((ep) => ({
             id: `${imdbId}:${ep.season}:${ep.number}`,

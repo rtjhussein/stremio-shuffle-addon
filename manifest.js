@@ -1,6 +1,6 @@
 const manifest = {
   id: "org.shuffler.stremio",
-  version: "1.1.5",
+  version: "1.1.6",
   name: "Series Shuffler Pro",
   description:
     "Professional orchestration layer to play random episodes using your own scrapers.",
