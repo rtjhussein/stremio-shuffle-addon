@@ -1,6 +1,7 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const manifest = require("./manifest");
+const { pickRandomEpisode } = require("./core/shuffleEngine");
 
 const builder = new addonBuilder(manifest);
 
@@ -31,42 +32,49 @@ builder.defineCatalogHandler(({ type, id }) => {
 builder.defineMetaHandler(async ({ type, id }) => {
   if (id.endsWith(":shuffle")) {
     const imdbId = id.split(":")[0];
+
     try {
-      // Fetch episodes from Cinemeta
       const metaRes = await axios.get(
         `https://v3-cinemeta.strem.io/meta/series/${imdbId}.json`,
       );
-      const videos = metaRes.data.meta.videos.filter((v) => v.season > 0);
 
-      // Random Decision
-      const randomVid = videos[Math.floor(Math.random() * videos.length)];
+      const videos = metaRes.data.meta.videos;
+      const randomVid = pickRandomEpisode(videos);
 
       console.log(
-        `[Shuffle] Selected: S${randomVid.season} E${randomVid.number}`,
+        `Decision: Shuffled to S${randomVid.season} E${randomVid.number}`,
       );
 
       return {
         meta: {
           id: id,
           type: "series",
-          name: `🎲 Playing: S${randomVid.season} E${randomVid.number}`,
+          name: `🎲 Playing: ${randomVid.name}`,
           videos: [
             {
-              id: `${imdbId}:${randomVid.season}:${randomVid.number}`, // Real ID for scrapers
+              id: `${imdbId}:${randomVid.season}:${randomVid.number}`,
               title: `Shuffle Result: ${randomVid.name || "Episode " + randomVid.number}`,
               season: randomVid.season,
               number: randomVid.number,
-              released: randomVid.released,
-              overview:
-                "Your scrapers are now finding the best links for this random episode...",
+              overview: "Click to find streams for this random episode",
             },
           ],
         },
       };
     } catch (e) {
       console.error("Meta Error:", e.message);
+
+      return {
+        meta: {
+          id,
+          type: "series",
+          name: "⚠️ Shuffle failed",
+          videos: [],
+        },
+      };
     }
   }
+
   return Promise.resolve({ meta: null });
 });
 
